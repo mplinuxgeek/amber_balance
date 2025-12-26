@@ -1,0 +1,12 @@
+{
+  "domain": "amber_balance",
+  "name": "Amber Balance",
+  "version": "0.1.0",
+  "documentation": "https://github.com/bircoe/amber_balance",
+  "issue_tracker": "https://github.com/bircoe/amber_balance/issues",
+  "codeowners": ["@bircoe"],
+  "requirements": [],
+  "iot_class": "cloud_polling",
+  "config_flow": true,
+  "integration_type": "service"
+}
