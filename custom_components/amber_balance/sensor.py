@@ -208,12 +208,18 @@ class AmberBalanceSensor(SensorEntity):
             records = await self._api.fetch_usage(start, end)
             daily = self._summaries(records, start, end)
             totals = self._totals(daily)
+            range_end = end
+            if daily:
+                try:
+                    range_end = datetime.strptime(daily[-1]["date"], ISO_DATE).date()
+                except Exception:
+                    pass
 
             self._state = round(totals["position"], 2)
             self._attr_extra_state_attributes = {
                 ATTR_ATTRIBUTION: "Data from amber.com.au",
                 "range_start": start.isoformat(),
-                "range_end": end.isoformat(),
+                "range_end": range_end.isoformat(),
                 "import_kwh": round(totals["import_kwh"], 2),
                 "export_kwh": round(totals["export_kwh"], 2),
                 "import_cost": round(totals["import_cost"], 2),
@@ -245,11 +251,15 @@ class AmberBalanceSensor(SensorEntity):
         cur = start
         while cur <= end:
             key = cur.strftime(ISO_DATE)
-            daily.append(self._summarize_day(key, by_date.get(key, [])))
+            summary = self._summarize_day(key, by_date.get(key, []))
+            if summary:
+                daily.append(summary)
             cur += timedelta(days=1)
         return daily
 
     def _summarize_day(self, dkey: str, records: list[dict]):
+        if not records:
+            return None
         import_cost = 0.0
         export_earnings = 0.0
         import_kwh = 0.0

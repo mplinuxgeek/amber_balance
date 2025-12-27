@@ -1,7 +1,7 @@
 {
   "domain": "amber_balance",
   "name": "Amber Balance",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "documentation": "https://github.com/bircoe/amber_balance",
   "issue_tracker": "https://github.com/bircoe/amber_balance/issues",
   "codeowners": ["@bircoe"],
