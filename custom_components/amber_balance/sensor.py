@@ -222,9 +222,9 @@ class AmberBalanceSensor(SensorEntity):
                 "range_end": range_end.isoformat(),
                 "import_kwh": round(totals["import_kwh"], 2),
                 "export_kwh": round(totals["export_kwh"], 2),
-                "import_cost": round(totals["import_cost"], 2),
-                "export_earnings": round(totals["export_earnings"], 2),
-                "total": round(totals["total_cost"], 2),
+                "import_value": round(totals["import_value"], 2),
+                "export_value": round(totals["export_value"], 2),
+                "energy_total": round(totals["energy_total"], 2),
                 "surcharge": round(totals["surcharge"], 2),
                 "subscription": round(totals["subscription"], 2),
                 "position": round(totals["position"], 2),
@@ -260,8 +260,8 @@ class AmberBalanceSensor(SensorEntity):
     def _summarize_day(self, dkey: str, records: list[dict]):
         if not records:
             return None
-        import_cost = 0.0
-        export_earnings = 0.0
+        import_value = 0.0
+        export_value = 0.0
         import_kwh = 0.0
         export_kwh = 0.0
         for rec in records:
@@ -269,26 +269,26 @@ class AmberBalanceSensor(SensorEntity):
             kwh = rec.get("kwh") or 0.0
             channel_type = rec.get("channelType")
             if channel_type == "feedIn":
-                export_earnings += cost
+                export_value += cost
                 export_kwh += abs(kwh)
             else:
-                import_cost += cost
+                import_value += cost
                 import_kwh += kwh
-        import_cost /= 100.0
-        export_earnings /= 100.0
-        total_cost = import_cost + export_earnings
+        import_value /= 100.0
+        export_value /= 100.0
+        energy_total = import_value + export_value
 
         surcharge = self._surcharge_cents / 100.0
         days_in_month = calendar.monthrange(int(dkey[:4]), int(dkey[5:7]))[1]
         subscription = self._subscription / days_in_month
-        position = total_cost + surcharge + subscription
+        position = energy_total + surcharge + subscription
         return {
             "date": dkey,
             "import_kwh": import_kwh,
             "export_kwh": export_kwh,
-            "import_cost": import_cost,
-            "export_earnings": export_earnings,
-            "total_cost": total_cost,
+            "import_value": import_value,
+            "export_value": export_value,
+            "energy_total": energy_total,
             "surcharge": surcharge,
             "subscription": subscription,
             "position": position,
@@ -298,9 +298,9 @@ class AmberBalanceSensor(SensorEntity):
         agg = {
             "import_kwh": 0.0,
             "export_kwh": 0.0,
-            "import_cost": 0.0,
-            "export_earnings": 0.0,
-            "total_cost": 0.0,
+            "import_value": 0.0,
+            "export_value": 0.0,
+            "energy_total": 0.0,
             "surcharge": 0.0,
             "subscription": 0.0,
             "position": 0.0,
