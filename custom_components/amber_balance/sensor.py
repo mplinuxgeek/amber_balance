@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import calendar
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta
 import logging
+from zoneinfo import ZoneInfo
 
 import aiohttp
 import async_timeout
@@ -171,6 +172,9 @@ class AmberBalanceSensor(SensorEntity):
         self._state = None
         self._attr_extra_state_attributes = {ATTR_ATTRIBUTION: "Data from amber.com.au"}
         self._coordinator: DataUpdateCoordinator | None = None
+        self._daily_cache: dict[str, dict] = {}
+        self._cached_month: tuple[int, int] | None = None
+        self._nem_tz = ZoneInfo("Australia/Sydney")
 
     @property
     def unique_id(self):
@@ -199,14 +203,29 @@ class AmberBalanceSensor(SensorEntity):
 
     async def _async_update_data(self):
         try:
-            nem_tz = timezone(timedelta(hours=10))
-            today = datetime.now(nem_tz).date()
-            # Current month from day 1 up to yesterday
+            today = datetime.now(self._nem_tz).date()
             start = date(today.year, today.month, 1)
             end = today - timedelta(days=1)
 
-            records = await self._api.fetch_usage(start, end)
-            daily = self._summaries(records, start, end)
+            # Reset cache at month boundary
+            if self._cached_month != (start.year, start.month):
+                self._daily_cache = {}
+                self._cached_month = (start.year, start.month)
+
+            records: list[dict] = []
+            if start <= end:
+                fetch_start = start
+                if self._daily_cache:
+                    last_cached = max(date.fromisoformat(k) for k in self._daily_cache)
+                    if end > last_cached:
+                        fetch_start = max(start, last_cached)
+                    else:
+                        # Re-fetch the most recent cached day to pick up any late-arriving data
+                        fetch_start = last_cached
+                if fetch_start <= end:
+                    records = await self._api.fetch_usage(fetch_start, end)
+
+            daily = self._merge_daily(records, start, end)
             totals = self._totals(daily)
             range_end = end
             if daily:
@@ -239,7 +258,17 @@ class AmberBalanceSensor(SensorEntity):
         if self._coordinator:
             await self._coordinator.async_request_refresh()
 
-    def _summaries(self, records: list[dict], start: date, end: date):
+    def _merge_daily(self, records: list[dict], start: date, end: date):
+        if records:
+            self._daily_cache.update(self._summaries(records))
+        daily = []
+        for dkey in sorted(self._daily_cache):
+            ddate = date.fromisoformat(dkey)
+            if start <= ddate <= end:
+                daily.append(self._daily_cache[dkey])
+        return daily
+
+    def _summaries(self, records: list[dict]):
         by_date: dict[str, list[dict]] = {}
         for rec in records:
             d = rec.get("date")
@@ -247,14 +276,11 @@ class AmberBalanceSensor(SensorEntity):
                 continue
             by_date.setdefault(d, []).append(rec)
 
-        daily = []
-        cur = start
-        while cur <= end:
-            key = cur.strftime(ISO_DATE)
-            summary = self._summarize_day(key, by_date.get(key, []))
+        daily: dict[str, dict] = {}
+        for key, day_records in by_date.items():
+            summary = self._summarize_day(key, day_records)
             if summary:
-                daily.append(summary)
-            cur += timedelta(days=1)
+                daily[key] = summary
         return daily
 
     def _summarize_day(self, dkey: str, records: list[dict]):
